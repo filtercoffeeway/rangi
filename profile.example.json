@@ -1,0 +1,65 @@
+{
+  "_comment": "Standing preferences. Menus do the routing: if only one place lists an item, that is where the call goes. 'prefer' overrides that for a phrase.",
+  "_SAFETY": "Every phone number below is the OWNER'S OWN number, not the real business. Nothing here can dial a restaurant until you deliberately change these. Play the counterparty yourself until the agent behaves.",
+  "customer_name": "Mahesh",
+  "places": [
+    {
+      "name": "Mylapore Express",
+      "phone": "+12065550100",
+      "note": "pay at store",
+      "menu": [
+        {
+          "item": "filter coffee",
+          "price_cents": 475,
+          "aliases": [
+            "kaapi",
+            "filter kaapi",
+            "degree coffee"
+          ],
+          "cap_cents": 600
+        },
+        {
+          "item": "masala chai",
+          "price_cents": 295,
+          "aliases": [
+            "chai"
+          ]
+        },
+        {
+          "item": "medu vada",
+          "price_cents": 450,
+          "aliases": [
+            "vada"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Blue Bottle",
+      "phone": "+12065550100",
+      "menu": [
+        {
+          "item": "latte",
+          "price_cents": 595
+        },
+        {
+          "item": "cortado",
+          "price_cents": 495
+        },
+        {
+          "item": "americano",
+          "price_cents": 445
+        }
+      ]
+    }
+  ],
+  "prefer": {
+    "coffee": "Mylapore Express"
+  },
+  "defaults": {
+    "item": "filter coffee",
+    "size": "medium",
+    "cap_headroom_cents": 250,
+    "pickup_within_minutes": 45
+  }
+}

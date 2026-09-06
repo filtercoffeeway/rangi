@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Otrango — operator console</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #fff; --border: #e4e4e1; --fg: #1c1c1a;
+    --muted: #75756e; --accent: #b4530a; --ok: #1a7f4b; --warn: #9a6b00;
+    --err: #b3261e; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --panel: #1d1d22; --border: #2e2e35; --fg: #e9e9e6;
+      --muted: #96968d; --accent: #e08a3c; --ok: #4ac585; --warn: #d9a441;
+      --err: #f2837a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 1rem; margin: 0; letter-spacing: -.01em; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  #conn { margin-left: auto; font-size: .8rem; color: var(--muted); }
+  #conn.live::before { content: "● "; color: var(--ok); }
+  #conn.down::before { content: "● "; color: var(--err); }
+  main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1.25rem; padding: 1.25rem; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0,1fr); } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .panel h2 {
+    margin: 0; padding: .7rem 1rem; font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  .body { padding: 1rem; }
+  form { display: flex; gap: .5rem; flex-wrap: wrap; }
+  select {
+    padding: .3rem .4rem; font: inherit; font-size: .82rem; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  }
+  input {
+    flex: 1 1 12rem; min-width: 0; padding: .5rem .65rem; font: inherit;
+    font-family: var(--mono); font-size: .85rem; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  }
+  button {
+    padding: .5rem 1rem; font: inherit; font-weight: 500; cursor: pointer;
+    color: #fff; background: var(--accent); border: 0; border-radius: 6px;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .note { margin-top: .6rem; font-size: .82rem; color: var(--muted); }
+  .note.err { color: var(--err); }
+  .scroll { max-height: 26rem; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { padding: .55rem .75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 500; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  td.mono { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+  .pill {
+    display: inline-block; padding: .1rem .5rem; border-radius: 99px;
+    font-size: .72rem; font-weight: 500; border: 1px solid currentColor;
+  }
+  .s-queued, .s-dialing { color: var(--warn); }
+  .s-in_progress { color: var(--accent); }
+  .s-ended { color: var(--ok); }
+  .s-failed { color: var(--err); }
+  dl { margin: 0; display: grid; grid-template-columns: auto minmax(0,1fr); gap: .4rem .9rem; font-size: .85rem; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: var(--mono); font-size: .8rem; word-break: break-all; }
+  pre {
+    margin: .9rem 0 0; padding: .8rem; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; font-family: var(--mono); font-size: .78rem;
+    white-space: pre-wrap; max-height: 18rem; overflow: auto;
+  }
+  .empty { color: var(--muted); font-size: .85rem; }
+  a { color: var(--accent); }
+  .check { display: flex; align-items: center; gap: .4rem; margin-top: .6rem; font-size: .82rem; color: var(--muted); }
+  .check input { flex: 0 0 auto; }
+  #pending {
+    margin-top: .8rem; padding: .7rem .8rem; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .pending-body { font-size: .85rem; }
+  .pending-actions { display: flex; gap: .5rem; margin-top: .6rem; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: .5rem; margin-top: .9rem; }
+  .metric { padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 6px; }
+  .metric b { display: block; font-family: var(--mono); font-size: .95rem; font-weight: 600; }
+  .metric span { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .metric.bad b { color: var(--err); }
+  .banner { padding: .55rem .7rem; border-radius: 6px; font-size: .85rem; margin-bottom: .8rem; }
+  .banner.review { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+  .banner.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+  .verify { display: flex; gap: .4rem; margin-top: .6rem; }
+  .verify button { font-size: .78rem; padding: .35rem .7rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Otrango <span>· operator console</span></h1>
+  <div id="conn" class="down">connecting…</div>
+</header>
+
+<main>
+  <div>
+    <div class="panel">
+      <h2>New order</h2>
+      <div class="body">
+        <form id="draft">
+          <input id="order" placeholder="coffee" autocomplete="off" spellcheck="false" value="coffee">
+          <input id="to" placeholder="+1415… (optional)" autocomplete="off" spellcheck="false">
+          <button id="go" type="submit">Draft</button>
+        </form>
+        <label class="check"><input type="checkbox" id="dry"> Dry run — talk it through, don't commit</label>
+        <label class="check">Voice
+          <select id="voice">
+            <option value="agent">Agent (stock)</option>
+            <option value="mine">Mine (cloned)</option>
+          </select>
+        </label>
+        <div id="pending" hidden>
+          <div class="pending-body" id="pendingText"></div>
+          <div class="pending-actions">
+            <button id="authorize" type="button">Authorize &amp; dial</button>
+            <button id="discard" type="button" class="ghost">Discard</button>
+          </div>
+        </div>
+        <div class="note" id="note">Nothing is dialed until you authorize.</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:1.25rem">
+      <h2>Calls</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>When</th><th>To</th><th>Status</th><th>Reason</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="4" class="empty" style="padding:1rem">No calls yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Detail</h2>
+    <div class="body" id="detail"><div class="empty">Select a call.</div></div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let calls = new Map();
+let selected = null;
+
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString() : "—";
+
+function render() {
+  const list = [...calls.values()].sort((a, b) =>
+    new Date(b.created_at) - new Date(a.created_at));
+
+  $("#rows").innerHTML = list.length ? list.map(c => `
+    <tr data-id="${c.id}" aria-selected="${c.id === selected}">
+      <td class="mono">${fmtTime(c.created_at)}</td>
+      <td class="mono">${c.to_number}</td>
+      <td><span class="pill s-${c.status}">${c.status}</span></td>
+      <td class="mono">${c.end_reason || "—"}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="4" class="empty" style="padding:1rem">No calls yet.</td></tr>`;
+
+  for (const tr of document.querySelectorAll("#rows tr[data-id]")) {
+    tr.onclick = () => { selected = tr.dataset.id; render(); loadDetail(selected); };
+  }
+  if (selected && calls.has(selected)) renderDetail(calls.get(selected));
+}
+
+const money = c => c == null ? "—" : "$" + (c / 100).toFixed(2);
+
+function renderDetail(c, events, outcome, metrics) {
+  let banner = "";
+  if (outcome) {
+    banner = outcome.needs_review
+      ? `<div class="banner review">${outcome.result}${outcome.failure_class
+          ? " · " + outcome.failure_class : ""} — needs your confirmation
+         <div class="verify">
+           <button data-verdict="correct">Correct</button>
+           <button data-verdict="wrong" class="ghost">Wrong</button>
+           <button data-verdict="never_arrived" class="ghost">Never arrived</button>
+         </div></div>`
+      : `<div class="banner ok">${outcome.result} · verified ${outcome.user_verdict || ""}</div>`;
+  }
+
+  // Turn timing is the only place the agent-to-agent pathologies are visible —
+  // a transcript reads fine whether the gap before a line was 300ms or 9s.
+  let metricsHtml = "";
+  if (metrics) {
+    const cell = (v, label, bad) =>
+      `<div class="metric${bad ? " bad" : ""}"><b>${v}</b><span>${label}</span></div>`;
+    metricsHtml = `<div class="metrics">
+      ${cell(metrics.turn_count, "turns", metrics.turn_count > 30)}
+      ${cell(metrics.gap_p50_ms + "ms", "gap p50")}
+      ${cell(metrics.gap_p95_ms + "ms", "gap p95", metrics.gap_p95_ms > 2500)}
+      ${cell(metrics.dead_air_events, "dead air", metrics.dead_air_events > 0)}
+      ${cell(metrics.barge_in_count, "barge-ins", metrics.barge_in_count > 2)}
+      ${cell((metrics.time_to_outcome_ms / 1000).toFixed(1) + "s", "duration")}
+    </div>`;
+  }
+
+  $("#detail").innerHTML = `
+    ${banner}
+    <dl>
+      <dt>status</dt><dd><span class="pill s-${c.status}">${c.status}</span></dd>
+      <dt>to</dt><dd>${c.to_number}</dd>
+      <dt>result</dt><dd>${outcome ? outcome.result : "—"}</dd>
+      <dt>confidence</dt><dd>${outcome ? outcome.confidence : "—"}</dd>
+      <dt>total</dt><dd>${outcome ? money(outcome.total_cents) : "—"}</dd>
+      <dt>ready</dt><dd>${outcome && outcome.ready_at ? fmtTime(outcome.ready_at) : "—"}</dd>
+      <dt>order ref</dt><dd>${outcome && outcome.confirmation_ref || "—"}</dd>
+      <dt>ended</dt><dd>${fmtTime(c.ended_at)}${c.end_reason ? " · " + c.end_reason : ""}</dd>
+      <dt>voice</dt><dd>${c.voice_profile || "—"}</dd>
+      <dt>cost</dt><dd>${money(c.cost_cents)}</dd>
+      <dt>recording</dt><dd>${c.recording_url
+        ? `<a href="${c.recording_url}" target="_blank" rel="noreferrer">open</a>` : "—"}</dd>
+      <dt>events</dt><dd>${events ? events.length : "…"}</dd>
+    </dl>
+    ${metricsHtml}
+    ${outcome && outcome.notes ? `<div class="note">${escapeHtml(outcome.notes)}</div>` : ""}
+    ${c.transcript ? `<pre>${escapeHtml(c.transcript)}</pre>`
+      : `<div class="note">Transcript arrives with the end-of-call report.</div>`}`;
+
+  for (const btn of document.querySelectorAll("#detail .verify button")) {
+    btn.onclick = () => verify(c.id, btn.dataset.verdict);
+  }
+}
+
+async function verify(id, verdict) {
+  await fetch(`/api/calls/${id}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ verdict })
+  });
+  loadDetail(id);
+}
+
+const escapeHtml = s => s.replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m]));
+
+async function loadDetail(id) {
+  try {
+    const r = await fetch(`/api/calls/${id}`);
+    if (!r.ok) return;
+    const { call, events, outcome, metrics } = await r.json();
+    calls.set(call.id, call);
+    renderDetail(call, events || [], outcome, metrics);
+  } catch {}
+}
+
+async function loadCalls() {
+  try {
+    const r = await fetch("/api/calls");
+    const { calls: list } = await r.json();
+    calls = new Map((list || []).map(c => [c.id, c]));
+    render();
+  } catch {}
+}
+
+// Two steps on purpose: drafting creates no authority, and nothing is dialed
+// until the mandate is explicitly authorized.
+let pendingMandate = null;
+
+function setNote(text, isErr) {
+  const note = $("#note");
+  note.className = isErr ? "note err" : "note";
+  note.textContent = text;
+}
+
+$("#draft").onsubmit = async e => {
+  e.preventDefault();
+  const btn = $("#go");
+  btn.disabled = true;
+  setNote("Drafting…");
+  try {
+    const r = await fetch("/api/mandates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        input: $("#order").value.trim(),
+        to: $("#to").value.trim(),
+        dry_run: $("#dry").checked,
+        voice: $("#voice").value
+      })
+    });
+    const body = await r.json();
+    if (!r.ok) { setNote(body.error || "Could not draft that.", true); return; }
+
+    pendingMandate = body;
+    const spec = JSON.parse(body.spec || "{}");
+    const cap = body.constraints.max_total_cents;
+    $("#pendingText").innerHTML =
+      `<b>${spec.item || body.objective_type}</b> → ${body.target_phone}` +
+      (cap ? ` · cap ${money(cap)}` : "") +
+      (body.constraints.dry_run ? " · <b>dry run</b>" : "") +
+      (body.constraints.voice ? ` · voice <b>${body.constraints.voice}</b>` : "");
+    $("#pending").hidden = false;
+    setNote("Nothing dialed yet.");
+  } catch (err) {
+    setNote(String(err), true);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$("#authorize").onclick = async () => {
+  if (!pendingMandate) return;
+  const btn = $("#authorize");
+  btn.disabled = true;
+  setNote("Authorizing and dialing…");
+  try {
+    const r = await fetch(`/api/mandates/${pendingMandate.id}/authorize`, { method: "POST" });
+    const body = await r.json();
+    if (!r.ok) { setNote(body.error || "Dial failed.", true); return; }
+    calls.set(body.id, body);
+    selected = body.id;
+    pendingMandate = null;
+    $("#pending").hidden = true;
+    setNote("Call placed.");
+    render();
+    loadDetail(body.id);
+  } catch (err) {
+    setNote(String(err), true);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$("#discard").onclick = () => {
+  pendingMandate = null;
+  $("#pending").hidden = true;
+  setNote("Discarded. Nothing was dialed.");
+};
+
+function connect() {
+  const es = new EventSource("/api/stream");
+  es.onopen = () => { $("#conn").className = "live"; $("#conn").textContent = "live"; };
+  es.onerror = () => { $("#conn").className = "down"; $("#conn").textContent = "reconnecting…"; };
+  es.onmessage = ev => {
+    const { kind, data } = JSON.parse(ev.data);
+    if (kind === "call.created" || kind === "call.updated") {
+      calls.set(data.id, data);
+      render();
+      if (data.id === selected) loadDetail(data.id);
+    }
+  };
+}
+
+loadCalls();
+connect();
+</script>
+</body>
+</html>

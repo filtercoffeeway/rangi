@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+.env.local
+*.pem
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Local preferences — may name real businesses and numbers
+profile.json
+otrango.egg-info/
