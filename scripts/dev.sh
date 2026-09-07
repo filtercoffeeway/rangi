@@ -105,7 +105,7 @@ fi
 # ---- readiness ------------------------------------------------------------
 
 printf '\n'
-if curl -fsS "http://localhost:$PORT/healthz" | grep -q '"vapi_ready":true'; then
+if curl -fsS "http://localhost:$PORT/healthz" | grep -q '"vapi_ready": *true'; then
   ok "vapi       configured — dialing available"
 else
   printf '\033[33m!\033[0m vapi not configured — console works, dialing will fail\n'
