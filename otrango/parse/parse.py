@@ -33,6 +33,11 @@ class Order:
     qty: int = 1
     as_requested: str = ""
     note: str = ""
+    # milk and temperature are set only when the owner actually said one --
+    # e.g. "oat milk iced coffee". Empty means unspecified, not "none": the
+    # skill falls back to the item's or the profile's standing preference.
+    milk: str = ""
+    temperature: str = ""
     # unclear is set when the request cannot be turned into one order. It
     # carries the question to put back to the owner rather than a guess.
     unclear: str = ""
@@ -56,8 +61,16 @@ _TOOL_SCHEMA = {
                           "description": 'The words THEY used for the item, e.g. "kaapi". '
                                          "Keep their phrasing."},
         "note": {"type": "string",
-                 "description": 'Any instruction that is not item, place or quantity, e.g. '
-                                '"extra hot". Empty if none.'},
+                 "description": 'Any instruction that is not item, place, quantity, milk or '
+                                'temperature, e.g. "extra hot". Empty if none.'},
+        "milk": {"type": "string",
+                 "description": 'Milk preference ONLY if they said one, e.g. "oat", "almond", '
+                                '"whole", "regular". Empty if not mentioned -- leave it to the '
+                                "standing preference on file. Never invent one."},
+        "temperature": {"type": "string",
+                         "description": 'Hot or cold/iced, ONLY if they said one. Empty if not '
+                                        "mentioned -- leave it to the standing preference on file. "
+                                        "Never invent one."},
         "unclear": {"type": "string",
                     "description": "If you cannot work out a single order, the short question "
                                    "to ask them. Empty otherwise. Prefer asking over guessing."},
@@ -92,7 +105,9 @@ class LLM:
                 o = Order(
                     item=d.get("item") or "", place=d.get("place") or "",
                     qty=int(d.get("qty") or 0), as_requested=d.get("as_requested") or "",
-                    note=d.get("note") or "", unclear=d.get("unclear") or "",
+                    note=d.get("note") or "",
+                    milk=d.get("milk") or "", temperature=d.get("temperature") or "",
+                    unclear=d.get("unclear") or "",
                 )
                 if o.qty <= 0:
                     o.qty = 1

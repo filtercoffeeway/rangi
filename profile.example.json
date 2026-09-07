@@ -1,6 +1,7 @@
 {
   "_comment": "Standing preferences. Menus do the routing: if only one place lists an item, that is where the call goes. 'prefer' overrides that for a phrase.",
   "_SAFETY": "Every phone number below is the OWNER'S OWN number, not the real business. Nothing here can dial a restaurant until you deliberately change these. Play the counterparty yourself until the agent behaves.",
+  "_preferences": "Answer-only-if-asked. The agent never volunteers these -- it just has the right answer ready if the shop asks. milk and temperature are the exception: if an order specifically asks for one (e.g. \"oat milk iced coffee\"), that one IS stated up front instead of held back. Any key works here, at the item level or in defaults -- item wins, defaults is the fallback, and a key nowhere just never comes up.",
   "customer_name": "Mahesh",
   "places": [
     {
@@ -11,26 +12,19 @@
         {
           "item": "filter coffee",
           "price_cents": 475,
-          "aliases": [
-            "kaapi",
-            "filter kaapi",
-            "degree coffee"
-          ],
-          "cap_cents": 600
+          "aliases": ["kaapi", "filter kaapi", "degree coffee"],
+          "cap_cents": 600,
+          "preferences": {"milk": "regular", "temperature": "hot", "sugar": "jaggery"}
         },
         {
           "item": "masala chai",
           "price_cents": 295,
-          "aliases": [
-            "chai"
-          ]
+          "aliases": ["chai"]
         },
         {
           "item": "medu vada",
           "price_cents": 450,
-          "aliases": [
-            "vada"
-          ]
+          "aliases": ["vada"]
         }
       ]
     },
@@ -38,28 +32,17 @@
       "name": "Blue Bottle",
       "phone": "+12065550100",
       "menu": [
-        {
-          "item": "latte",
-          "price_cents": 595
-        },
-        {
-          "item": "cortado",
-          "price_cents": 495
-        },
-        {
-          "item": "americano",
-          "price_cents": 445
-        }
+        {"item": "latte", "price_cents": 595},
+        {"item": "cortado", "price_cents": 495},
+        {"item": "americano", "price_cents": 445}
       ]
     }
   ],
-  "prefer": {
-    "coffee": "Mylapore Express"
-  },
+  "prefer": {"coffee": "Mylapore Express"},
   "defaults": {
     "item": "filter coffee",
-    "size": "medium",
     "cap_headroom_cents": 250,
-    "pickup_within_minutes": 45
+    "pickup_within_minutes": 45,
+    "preferences": {"size": "small", "dine_in": "to go"}
   }
 }

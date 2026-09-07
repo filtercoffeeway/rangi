@@ -25,6 +25,14 @@ class Item:
     # headroom to suit a single item quietly loosens the limit on
     # everything else.
     cap_cents: int = 0
+    # preferences are the owner's standing answers for this item -- milk,
+    # temperature, sugar, size, dine_in, whatever comes up. Answer-only-if-
+    # asked by default: the agent does not volunteer one unless the order
+    # itself asked for it by name (coffee.Skill.build handles that
+    # distinction; this is just where the standing value lives). A key
+    # missing here falls back to Defaults.preferences, then to nothing --
+    # blank means genuinely no preference, not a guess.
+    preferences: dict[str, str] = field(default_factory=dict)
 
     def known_as(self, phrase: str) -> bool:
         """Reports whether `phrase` is a name this item genuinely goes by,
@@ -50,6 +58,7 @@ class Item:
             price_cents=int(d.get("price_cents") or 0),
             aliases=list(d.get("aliases") or []),
             cap_cents=int(d.get("cap_cents") or 0),
+            preferences=dict(d.get("preferences") or {}),
         )
 
 
@@ -73,17 +82,22 @@ class Place:
 @dataclass
 class Defaults:
     item: str = ""
-    size: str = "medium"
     cap_headroom_cents: int = 250
     pickup_within_minutes: int = 45
+    # Fallback preferences (milk, temperature, sugar, size, dine_in, ...)
+    # when an item on the menu does not set its own. "size" lives here too
+    # now -- it is the same kind of thing as milk or sugar, not special;
+    # _apply_defaults gives it "medium" if the profile leaves it out
+    # entirely.
+    preferences: dict[str, str] = field(default_factory=dict)
 
     @staticmethod
     def from_json(d: dict[str, Any]) -> "Defaults":
         return Defaults(
             item=d.get("item") or "",
-            size=d.get("size") or "medium",
             cap_headroom_cents=int(d.get("cap_headroom_cents") or 0),
             pickup_within_minutes=int(d.get("pickup_within_minutes") or 0),
+            preferences=dict(d.get("preferences") or {}),
         )
 
 
@@ -156,8 +170,8 @@ class Profile:
                 raise ProfileError(f'prefer[{term!r}] names {want!r}, which is not in places')
 
     def _apply_defaults(self) -> None:
-        if not self.defaults.size:
-            self.defaults.size = "medium"
+        if not self.defaults.preferences.get("size"):
+            self.defaults.preferences["size"] = "medium"
         if self.defaults.cap_headroom_cents <= 0:
             self.defaults.cap_headroom_cents = 250
         if self.defaults.pickup_within_minutes <= 0:
