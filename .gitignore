@@ -23,3 +23,9 @@ dist/
 # Local preferences — may name real businesses and numbers
 profile.json
 otrango.egg-info/
+
+# Call data — recording URLs, transcripts, real phone numbers
+transcripts/
+
+# JetBrains IDE
+.idea/
