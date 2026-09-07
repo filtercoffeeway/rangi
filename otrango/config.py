@@ -41,8 +41,24 @@ class Config:
     test_phone_number: str = ""
 
     anthropic_api_key: str = ""
-    # llm_model is the model behind the voice agent and the T0 eval tier.
+    # llm_model is the model behind order PARSING (parse.LLM) and the T0
+    # eval tier. Anthropic-only: parse.LLM and the eval harness both talk
+    # to the Anthropic SDK directly with anthropic_api_key, not through
+    # Vapi, so this cannot point at another provider.
     llm_model: str = "claude-haiku-4-5-20251001"
+
+    # voice_llm_provider/voice_llm_model are what actually goes on the
+    # PHONE CALL, via a Vapi assistantOverride (adapter.Caller). These are
+    # separate from llm_model on purpose: Vapi itself talks to the
+    # provider, so this can be any provider/model Vapi supports (Anthropic,
+    # OpenAI, ...) independent of what parses orders. The tradeoff this
+    # creates: T0 evals replay text against llm_model, so once these two
+    # diverge, T0 no longer proves what a live call actually says -- know
+    # that before pointing this at a different provider than llm_model.
+    # Blank model falls back to llm_model, so the common case (both on the
+    # same Anthropic model) needs no second setting.
+    voice_llm_provider: str = "anthropic"
+    voice_llm_model: str = ""
 
     # profile is the owner's standing preferences: places, menus, routing.
     # None when no file is configured; the skills fall back to a
@@ -118,17 +134,26 @@ def load(dotenv_path: str = ".env") -> Config:
         target_phone_number=os.environ.get("TARGET_PHONE_NUMBER", ""),
         test_phone_number=os.environ.get("TEST_PHONE_NUMBER", ""),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-        # A voice agent lives inside a sub-second turn budget (PLAN.md
-        # S3.1), so the default is the fastest capable model rather than
-        # the most capable one.
-        #
-        # Must be a DATED id: Vapi validates against its own allow-list
-        # and rejects the undated aliases the Anthropic API accepts.
-        # Dated ids work with both, so one value serves the voice agent
-        # and the T0 evals. Vapi's list tops out at claude-sonnet-5 -- it
-        # does not accept opus.
+        # Talks to the Anthropic SDK directly (parse.LLM, the T0 harness),
+        # not through Vapi -- Anthropic only. A voice agent lives inside a
+        # sub-second turn budget (PLAN.md S3.1), so the default is the
+        # fastest capable model rather than the most capable one.
         llm_model=_env_or("OTRANGO_LLM_MODEL", "claude-haiku-4-5-20251001"),
+        # What actually goes on the call, via Vapi -- can be any
+        # provider/model Vapi supports. Must be a DATED id if the provider
+        # is Anthropic: Vapi validates against its own allow-list and
+        # rejects the undated aliases the Anthropic API accepts (its list
+        # tops out at claude-sonnet-5 -- it does not accept opus). Other
+        # providers (e.g. openai) use their own normal model names.
+        voice_llm_provider=_env_or("VOICE_LLM_PROVIDER", "anthropic"),
+        voice_llm_model=os.environ.get("VOICE_LLM_MODEL", ""),
     )
+
+    # The common case is one model for both parsing and the call, so a
+    # blank voice_llm_model means "same as llm_model" rather than a second
+    # setting everyone has to keep in sync.
+    if not c.voice_llm_model:
+        c.voice_llm_model = c.llm_model
 
     # A chat ID that does not parse is a hard error rather than a zero
     # value: silently leaving it unset would start the bot with a

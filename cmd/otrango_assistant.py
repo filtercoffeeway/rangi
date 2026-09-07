@@ -38,8 +38,8 @@ def main() -> None:
         # at dial time, because it encodes the specific mandate. This
         # placeholder only applies if a call is ever placed without one.
         "model": {
-            "provider": "anthropic",
-            "model": cfg.llm_model,
+            "provider": cfg.voice_llm_provider,
+            "model": cfg.voice_llm_model,
             "messages": [{
                 "role": "system",
                 "content": "You are an ordering assistant. If you have not been given "
