@@ -301,7 +301,9 @@ $("#draft").onsubmit = async e => {
     if (!r.ok) { setNote(body.error || "Could not draft that.", true); return; }
 
     pendingMandate = body;
-    const spec = JSON.parse(body.spec || "{}");
+    // spec comes back as a nested object already (Mandate.spec is a plain
+    // dict server-side, not a JSON-encoded string) -- no second parse.
+    const spec = body.spec || {};
     const cap = body.constraints.max_total_cents;
     $("#pendingText").innerHTML =
       `<b>${spec.item || body.objective_type}</b> → ${body.target_phone}` +
