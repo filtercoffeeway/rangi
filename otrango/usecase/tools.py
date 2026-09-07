@@ -117,7 +117,7 @@ class ToolsMixin:
         return json.dumps({
             "approved": decision.approved,
             "reason": decision.reason,
-            "guidance": _guidance_for(decision),
+            "guidance": _guidance_for(decision, p.ready_at is not None),
         })
 
     def _tool_escalate(self, provider_call_id: str, args: dict[str, Any]) -> str:
@@ -178,17 +178,35 @@ class ToolsMixin:
         return '{"ok":true,"guidance":"Outcome recorded. Thank them and end the call now."}'
 
 
-def _guidance_for(d: Decision) -> str:
-    if d.approved and d.price_unknown:
+def _guidance_for(d: Decision, has_ready_at: bool) -> str:
+    """has_ready_at is whether THIS call included a pickup time that parsed.
+    Calling propose_order again once one is heard -- even a second or third
+    time -- is the point: it turns "remember this across turns" into "check
+    with the server," which is a call this decides, not the model's memory.
+    A live call missed a time stated in passing ("thanks, ready in ten
+    minutes") and asked for it again after already having it; nothing here
+    had told the model to re-confirm rather than just remember.
+    """
+    if not d.approved:
         return (
-            "Approved. No price was quoted, which is fine — we pay at the counter. "
-            "Do not ask them for one. Confirm the order and get the pickup time."
+            "You may NOT confirm this order. Tell the other party politely that you "
+            "cannot proceed, call record_outcome, and end the call."
         )
-    if d.approved:
-        return "Confirm the order with the other party, then call record_outcome."
+    if has_ready_at:
+        return (
+            "Approved, and the pickup time is recorded. You have everything you need — "
+            "confirm the order and call record_outcome. Do not ask for the time again."
+        )
+    price_note = (
+        "No price was quoted, which is fine — we pay at the counter. Do not ask them "
+        "for one. "
+    ) if d.price_unknown else ""
     return (
-        "You may NOT confirm this order. Tell the other party politely that you "
-        "cannot proceed, call record_outcome, and end the call."
+        f"Approved. {price_note}Confirm the order. Do not trust your own memory for "
+        "the pickup time -- the moment you hear anything that sounds like one, even "
+        "folded into another sentence, call propose_order again with it before calling "
+        "record_outcome. Only ask directly if a couple more of their turns pass with "
+        "nothing that sounds like a time."
     )
 
 
