@@ -29,3 +29,12 @@ transcripts/
 
 # JetBrains IDE
 .idea/
+
+# Internal notes, planning and writing — not part of the public app
+PLAN.md
+RESEARCH.md
+context.md
+FUTURE_ENHANCEMENTS.md
+blogs/
+linkedin*.md
+*linkedin*

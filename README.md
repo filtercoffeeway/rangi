@@ -4,8 +4,7 @@ A voice agent that places real phone calls on your behalf. First use case: order
 by calling the restaurant directly — where the restaurant's order line is **itself an AI agent**.
 
 This is a line-for-line Python port of the original Go implementation (`../otrango`). Same
-architecture, same behavior, same tests, same eval suite — see [PLAN.md](PLAN.md) for the
-architecture and open questions, and [context.md](context.md) for the original idea.
+architecture, same behavior, same tests, same eval suite.
 
 **Status: Phases 0, 1, 2 and 4 are built and tested. Phase 3 — the real call — needs your
 credentials and a real coffee.**
@@ -156,7 +155,7 @@ infrastructure at all, which is what lets the rules be tested with in-memory fak
 file, no web server, no provider account.
 
 `tests/test_skills_boundary.py` parses the import graph and fails if the vertical-agnostic layer
-ever reaches into a skill. The extensibility claim in PLAN.md §2 is therefore enforced, not
+ever reaches into a skill. The extensibility claim is therefore enforced, not
 asserted — `otrango/skills/hours` was added without touching `objective/`, `store/`, `vapi/` or
 `turns/`.
 
