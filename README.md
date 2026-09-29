@@ -1,184 +1,187 @@
-# Otrango (Python)
+# Rangi
 
-A voice agent that places real phone calls on your behalf. First use case: ordering a coffee
-by calling the restaurant directly — where the restaurant's order line is **itself an AI agent**.
+A voice agent that places real phone calls on your behalf. The first use case is ordering
+coffee: you send "coffee" to a Telegram bot, confirm the order and price cap, and the agent
+calls the shop, places the order, and reports back what was actually agreed.
 
-This is a line-for-line Python port of the original Go implementation (`../otrango`). Same
-architecture, same behavior, same tests, same eval suite.
-
-**Status: Phases 0, 1, 2 and 4 are built and tested. Phase 3 — the real call — needs your
-credentials and a real coffee.**
+It is built on [Vapi](https://vapi.ai) for telephony and voice, and Anthropic's Claude for
+order parsing and the conversation itself.
 
 ---
 
-## What makes this more than a demo
-
-**A restaurant has no API.** There's no ACK and no order ID. "The counterparty agreed" is a
-claim about the world, not a confirmed write. So every call terminates with an explicit
-`result` + `confidence` + `needs_review`, an unrecognised result is `ambiguous` rather than
-`success`, and a reconciler forces a terminal record on any call that goes quiet.
-
-**The counterparty is a bot.** Two voice agents negotiating over PSTN — each with its own VAD,
-endpointing and barge-in policy — fail in ways that don't exist when a human answers: turn-taking
-deadlock, mutual barge-in livelock, politeness loops, and calls that simply never end because
-neither side gets impatient. `otrango/turns` measures all of it; hard duration and turn caps are
-the only guaranteed termination condition.
+## How it works
 
 **The model proposes, the server disposes.** A price cap living in a system prompt is not a
-price cap. `propose_order` evaluates against the stored mandate in Python, so no amount of
-prompting, peer pressure, or injected text moves it (`test_price_cap_survives_adversarial_framing`).
+price cap. When the agent tries to commit to an order, `propose_order` checks it against the
+stored mandate (item, quantity, cap) in Python. No amount of prompting, upselling or injected
+text moves it.
+
+**Nothing dials without your say-so.** Every order is two steps: draft a mandate, then
+authorize it. Drafting creates no authority.
+
+**A phone call has no API.** There's no order ID and no ACK — "the shop agreed" is a claim, not a
+confirmed write. So every call ends with an explicit `result` + `confidence` + `needs_review`;
+anything unrecognised is `ambiguous`, never `success`; and a reconciler forces a terminal record
+on any call that goes quiet.
+
+**The other side may be a bot too.** Many order lines are now AI agents. Two voice agents on one
+call fail in ways a human never causes: turn-taking deadlock, mutual barge-in, politeness loops,
+calls that never end. `otrango/turns` measures these, and hard duration and turn caps guarantee
+every call terminates.
 
 ---
 
-## Run it
+## Requirements
+
+- Python 3.11+
+- A [Vapi](https://vapi.ai) account and an imported phone number (outbound calls need one)
+- An [Anthropic API key](https://console.anthropic.com)
+- A Telegram bot (optional, but it's the easiest way to trigger orders)
+- A public HTTPS URL for Vapi's webhooks — [ngrok](https://ngrok.com) is fine for local use
+
+## Install
 
 ```bash
+git clone https://github.com/filtercoffeeway/rangi.git
+cd rangi
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-cp .env.example .env      # fill in as accounts come online
 .venv/bin/pytest
-./scripts/dev.sh          # service + ngrok tunnel + caffeinate
 ```
 
-`dev.sh` starts everything needed to take a real call from this machine, then proves the path
-end to end: the tunnel reaches the service, and the webhook rejects an unsigned request while
-accepting a signed one. It refuses to start on a stale config rather than serving one silently.
+The tests need no accounts or network.
 
-A laptop is a legitimate host for testing — the process is already warm, so unlike scale-to-zero
-hosting there is no cold start, and ngrok's inspector at `:4040` replays every webhook Vapi
-sends. What a laptop cannot survive is sleeping mid-call, which is why the script holds
-`caffeinate` for exactly as long as the service runs.
+## Configure
 
-For just the service, without a tunnel: `.venv/bin/python cmd/otrango.py`. It starts without any
-credentials — console, webhooks, mandates and the order parser all work; only dialing needs Vapi.
+```bash
+cp .env.example .env
+cp profile.example.json profile.json
+```
 
-## Setup, in order
+`.env.example` documents every variable. In order:
 
-1. **Create the Telegram bot.** Message [@BotFather](https://t.me/BotFather) → `/newbot` →
-   token into `TELEGRAM_BOT_TOKEN`. Then open the `t.me` link it gives you and **send the bot
-   anything**: a bot cannot start a conversation, so until you do this it has no chat to reply
-   to and the next step returns nothing. Read your chat ID off it:
-   ```bash
-   curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" \
-     | jq '.result[-1].message.chat.id'      # → TELEGRAM_CHAT_ID
-   ```
-   Optional, and worth it: `/setcommands` in BotFather (`coffee`, `help`) gives the chat a
-   native command menu.
-2. **Vapi account** → private API key → `.env`.
-3. **Buy a number and import it into Vapi.** Required, not optional: new Vapi accounts
-   get inbound-only numbers, so outbound calls need an imported one. The number is for
-   placing calls only — nothing here sends or receives text messages.
-4. **`ngrok http 8080`** → put the https URL in `PUBLIC_BASE_URL`. Needed by the Vapi
-   callback only; the Telegram trigger reaches out and works without it.
-5. **`openssl rand -hex 32`** → `VAPI_WEBHOOK_SECRET`.
-6. **Create the assistant:**
+1. **Anthropic** — set `ANTHROPIC_API_KEY`.
+2. **Vapi** — private API key into `VAPI_API_KEY`. Buy or import a number and put its ID in
+   `VAPI_PHONE_NUMBER_ID`.
+3. **Public URL** — run `ngrok http 8080` (or use any HTTPS host) and set `PUBLIC_BASE_URL`.
+4. **Webhook secret** — `openssl rand -hex 32` → `VAPI_WEBHOOK_SECRET`.
+5. **Create the assistant:**
    ```bash
    .venv/bin/python cmd/otrango_assistant.py | curl -sS -X POST https://api.vapi.ai/assistant \
      -H "Authorization: Bearer $VAPI_API_KEY" -H 'Content-Type: application/json' -d @-
    ```
    Copy the returned `id` into `VAPI_ASSISTANT_ID`.
+6. **Telegram bot** — message [@BotFather](https://t.me/BotFather) → `/newbot` → token into
+   `TELEGRAM_BOT_TOKEN`. Open the bot's `t.me` link and send it any message (a bot can't start
+   a conversation), then read your chat ID:
+   ```bash
+   curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" \
+     | jq '.result[-1].message.chat.id'      # → TELEGRAM_CHAT_ID
+   ```
+   Only that chat can trigger calls.
 
-## Ordering
+### Your profile
 
-Two steps, always. Drafting creates no authority; nothing dials until you authorize.
+`profile.json` holds your standing preferences: the places you order from, their menus and
+phone numbers, and defaults like size or milk. Menus do the routing — if only one place lists
+an item, that's where the call goes. See `profile.example.json` for the format.
+
+> **Start safe:** put your *own* phone number on every place until the agent behaves the way
+> you want, and play the shop yourself.
+
+## Run
 
 ```bash
-# Console: type an order, review the cap, click Authorize & dial.
+./scripts/dev.sh
+```
 
-# Terminal shell:
-.venv/bin/python cmd/otrango_shell.py
+This starts the service and an ngrok tunnel, checks the webhook path end to end, and (on macOS)
+holds `caffeinate` so the machine can't sleep mid-call. Ctrl-C stops everything.
 
-# Telegram:
+To run just the service: `.venv/bin/python cmd/otrango.py`. It starts without credentials; the
+console, mandates and order parser all work, and only dialing needs Vapi.
+
+The operator console is at `http://localhost:8080`.
+
+## Place an order
+
+**Telegram:**
+
+```
 you → coffee
-←     1 drip coffee (medium) for pickup, under Mahesh · cap $5.75 — reply Y to dial
+←     1 filter coffee (small) for pickup · cap $7.25 — reply Y to dial
 you → Y
-←     ☕ drip coffee confirmed · $3.25 · ready 4:12 · #47 — reply N if wrong
+←     ☕ filter coffee confirmed · $4.75 · ready 4:12 · #47 — reply N if wrong
+```
 
-# curl:
+**Console:** type an order, review the cap, click **Authorize & dial**.
+
+**Terminal:** `.venv/bin/python cmd/otrango_shell.py`
+
+**HTTP:**
+
+```bash
 MID=$(curl -s -X POST localhost:8080/api/mandates \
   -H 'Content-Type: application/json' -d '{"input":"latte","dry_run":true}' | jq -r .id)
 curl -X POST localhost:8080/api/mandates/$MID/authorize
 ```
 
-**Use `dry_run` first against a real target.** It runs the whole conversation and aborts at the
-commit point — real peer, real timing, no coffee.
+**Use `dry_run` first.** It runs the whole conversation and hangs up at the commit point, so
+you get a real call with no order placed.
 
 ## Evals
 
-The twelve scenarios in `otrango/eval` are the regression suite for a system whose interface is
-a conversation. Every one asserts on the `outcomes` row, never on transcript text — which is why
-a scenario can change substrate without its assertion changing.
+Twelve scripted scenarios (aggressive upsells, quotes above the cap, unavailable items, a shop
+that refuses automated callers, etc.) replay against the real prompt, tools and server-side checks. Each asserts on the
+recorded outcome, never on transcript text.
 
 ```bash
-.venv/bin/python cmd/otrango_eval.py                    # T0: text replay, ~$0.05, seconds
+.venv/bin/python cmd/otrango_eval.py                     # text replay, seconds, a few cents
 .venv/bin/python cmd/otrango_eval.py --tier 1            # + voice-shaped scenarios
 .venv/bin/python cmd/otrango_eval.py --scenario upsell -v
 ```
 
-T0 replays a scripted counterparty through the real prompt, the real tools and the real
-server-side enforcement — only STT, TTS and the carrier are absent. Pass bar: ≥10/12, **zero
-false successes** (a false success means you'd walk to a counter for coffee that was never
-ordered), zero non-terminating calls.
+The pass bar is at least 10/12, with **zero false successes** and zero calls that never end.
+
+## Adding a use case
+
+Verticals live in `otrango/skills/` (`coffee/` and `hours/` ship today). The core —
+`objective/`, `usecase/`, `store/`, `vapi/`, `turns/` — knows nothing about coffee, and
+`tests/test_skills_boundary.py` fails the build if it ever starts to. A new skill is a new
+package plus a line in `skills/register.py`.
 
 ## Layout
 
 ```
-cmd/otrango.py             composition root: wires SQLite + Vapi into the use cases
-cmd/otrango_eval.py         scenario suite
+cmd/otrango.py              the service
 cmd/otrango_assistant.py    emits the Vapi assistant config
-cmd/otrango_shell.py        a conversation with the agent, in the terminal
+cmd/otrango_eval.py         scenario suite
+cmd/otrango_shell.py        talk to the agent in a terminal
 
-DOMAIN — no internal dependencies
-  otrango/objective/   entities and rules: call, mandate, constraints, outcome
-  otrango/turns/       agent-to-agent timing metrics
-
-USE CASES — depend on the domain and on ports they declare themselves
-  otrango/usecase/     ports.py plus ordering, dial, tools, outcome, messaging, reconcile
-
-ADAPTERS — implement the ports
-  otrango/adapter/     store and Vapi behind the usecase interfaces
-  otrango/store/       SQLite, migrations, idempotent event sink
-  otrango/vapi/        provider client
-  otrango/notify/      outcome delivery
-  otrango/telegram/    the owner's channel: long-poll in, reply out
-  otrango/httpapi/     delivery only: parse, call a use case, render (Flask)
-  otrango/console/     embedded operator UI (static HTML, served by httpapi)
-  otrango/sse/         fan-out
-
-VERTICALS
-  otrango/skills/      coffee/ and hours/ + registry
-  otrango/agent/       tool contract, shared by Vapi and the evals
+otrango/objective/   domain: call, mandate, constraints, outcome
+otrango/turns/       agent-to-agent timing metrics
+otrango/usecase/     ordering, dialing, tools, outcomes, messaging, reconciler
+otrango/store/       SQLite, migrations, idempotent event sink
+otrango/vapi/        Vapi client
+otrango/telegram/    Telegram long-poll in, replies out
+otrango/httpapi/     HTTP API and webhooks (Flask)
+otrango/console/     operator UI
+otrango/skills/      verticals: coffee, hours
+otrango/agent/       tool contract shared by Vapi and the evals
 ```
 
-Dependencies point inward. `otrango/usecase`, `otrango/objective` and `otrango/turns` import no
-infrastructure at all, which is what lets the rules be tested with in-memory fakes — no SQLite
-file, no web server, no provider account.
-
-`tests/test_skills_boundary.py` parses the import graph and fails if the vertical-agnostic layer
-ever reaches into a skill. The extensibility claim is therefore enforced, not
-asserted — `otrango/skills/hours` was added without touching `objective/`, `store/`, `vapi/` or
-`turns/`.
+Dependencies point inward: `objective`, `usecase` and `turns` import no infrastructure, so the
+rules are tested with in-memory fakes.
 
 ## Notes
 
-- **Idempotency** uses a UNIQUE constraint on `sha256(call_id|type|status|endedReason)`; Vapi
-  doesn't guarantee a unique event id. Tool calls take a separate path — they're synchronous and
-  blocking, and a repeat is the model genuinely asking twice.
-- **Outcomes are write-once.** The first terminal record wins, so a late webhook or the
-  reconciler can't overwrite what the agent reported.
-- **Webhook parsing is partial and tolerant.** The raw body always lands in `events.payload`,
-  so anything mis-parsed today is recoverable from the DB.
-- **No response timeout** on the HTTP server's SSE stream — cutting it off would sever the live
-  console feed.
-- **No LLM in the trigger path.** `coffee`/`usual`/`Y`/`N` are exact-keyword matches.
-- Vapi's API shapes are from early-2025 docs and may have moved. If `otrango_assistant.py`'s
-  output is rejected, that's the first place to look.
-- The dev server (`werkzeug.serving.make_server`, threaded) is fine for local development and for
-  a laptop taking a real call; put a production WSGI server (gunicorn/waitress) in front for
-  anything beyond that.
+- **Outcomes are write-once.** The first terminal record wins; a late webhook can't overwrite it.
+- **Webhooks are idempotent** and the raw body is always stored, so anything mis-parsed is
+  recoverable from the database.
+- **No LLM in the trigger path.** `coffee` / `usual` / `Y` / `N` are exact keyword matches.
+- The built-in server is fine for local use. Put gunicorn or waitress in front of it for
+  anything more.
 
-## What's left
+## License
 
-Phase 3 is the only phase that can't be faked: dry runs against the live AI order-taker to
-gather real turn metrics, then one wet call, then check that the `outcomes` row matches the
-coffee in your hand.
+[MIT](LICENSE)
